@@ -168,19 +168,29 @@ Requires `g++` with C++20, Boost.System and OpenSSL.
 
 ## Assignment 4 — Results
 
-[benchmark.ipynb](a3-a4-item-update/benchmark.ipynb) plots the time taken for
-the profile updates against the number of users, items and queries. Output is
-in [a3-a4-item-update/plots/](a3-a4-item-update/plots/). Timing is measured in
-`dealer.cpp` with `std::chrono::high_resolution_clock`.
+The time taken for the profile updates was measured while varying the number of
+users, items and queries. The resulting plots are in
+[a3-a4-item-update/plots/](a3-a4-item-update/plots/):
+
+| Plot | Varies |
+|---|---|
+| `UserVsTime.png` | number of users |
+| `Itemvquery.png` | number of items |
+| `queryVsTime.png` | number of queries |
+
+Timing is measured in `dealer.cpp` with `std::chrono::high_resolution_clock`,
+which prints `Total execution time: N ms` at the end of a run.
 
 ## Known issues
 
 - **`a2-dpf-gen/Dockerfile` does not build.** It compiles with
   `g++ -o gen_queries gen_queries.cpp` but installs only `libboost-all-dev`,
-  while the source needs OpenSSL. It needs `libssl-dev` in the `apt-get` line
-  and `-std=c++20 ... -lssl -lcrypto` on the compile.
-- `a2-dpf-gen/gen_queries.cpp` reads the DPF size and count from `stdin`. The
-  A2 specification asks for `./gen_queries <DPF_size> <num_DPFs>`.
+  while the source needs OpenSSL. The steps given in `a2-dpf-gen/readme.pdf` —
+  `apt install libssl-dev` and `g++ gen_queries.cpp -o a -lssl -lcrypto` — are
+  the correct ones; the Dockerfile just does not do either of them.
+- `a2-dpf-gen/gen_queries.cpp` prompts for the DPF size and count on `stdin`,
+  as described in its report. The A2 specification instead asks for them as
+  arguments, `./gen_queries <DPF_size> <num_DPFs>`.
 - In `a3-a4-item-update/src/`, `party0.cpp`, `party1.cpp` and `dealer.cpp`
   include `"../common.hpp"` although the file is at `src/common.hpp`. It only
   resolves because of the `-I./src/headerFiles` flag in the Makefile.
