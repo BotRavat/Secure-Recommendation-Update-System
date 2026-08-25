@@ -4,19 +4,26 @@
 Shubham Rawat (251110070)
 Department of Computer Science and Engineering, IITK
 
-| Directory | Assignment | Contents |
-|---|---|---|
-| [a1-mpc-rec-sys/](a1-mpc-rec-sys/) | 1 | Secure update of the **user** matrix `U` |
-| [a2-dpf-gen/](a2-dpf-gen/) | 2 | Distributed Point Function generation and `EvalFull` testing |
-| [a3-a4-item-update/](a3-a4-item-update/) | 3 and 4 | Secure update of the **item** matrix `V` using DPF, plus timing plots |
+A two-party secure multi-party computation (MPC) system that updates a
+recommendation engine's latent user and item profiles after a query, without
+either party ever seeing a profile in the clear — or, for item updates,
+learning which item was queried.
 
-Each directory has its own `readme.pdf` — the report submitted for that
-assignment. This file is the repository index and collects what is common to
-all three.
+A recommendation system holds user profiles `U ∈ Z^{m×k}` and item profiles
+`V ∈ Z^{n×k}`. A prediction is `r̂ᵢⱼ = ⟨uᵢ, vⱼ⟩`. After a query `(i, j)`, both
+profiles move toward each other:
 
-Assignment 3 combines Assignment 1 and Assignment 2, so it keeps its own
-modified copies of the A1 protocol files and the A2 DPF code. Each assignment
-has to build and run on its own, so these copies are intentional.
+```
+δ  = 1 − ⟨ui, vj⟩
+ui ← ui + vj · δ        (user-profile update)
+vj ← vj + ui · δ        (item-profile update)
+```
+
+`U` and `V` are additively secret-shared between two servers `S0`, `S1`, and
+neither may learn either matrix. The item update is the harder of the two:
+the servers hold `V` but don't know which row `j` to touch, and the user knows
+`j` but can't compute the update value without a share of `V`. That's solved
+with a Distributed Point Function (DPF), described below.
 
 ---
 
@@ -43,8 +50,8 @@ Once shares of both `ui` and `vj` are obtained:
 
 ```
 δ  = 1 − ⟨ui, vj⟩          (1 is also secret shared between the parties)
-ui ← ui + vj · δ           (Assignment 1)
-vj ← vj + ui · δ           (Assignment 3)
+ui ← ui + vj · δ
+vj ← vj + ui · δ
 ```
 
 All multiplications — vector–scalar, vector–vector, and vector–matrix — use
@@ -66,17 +73,20 @@ only the local shares and MPC communication.
 
 ## Distributed Point Function
 
-Assignment 2 implements DPF generation and verifies it with `EvalFull`, which
-evaluates both keys across the whole domain and checks that the shares
-reconstruct the target value at the chosen index and zero elsewhere. The PRG
-uses AES-128-ECB through OpenSSL EVP to expand a 128-bit seed into two child
-seeds per level.
+For the item-profile update, the servers must apply the update at row `j`
+without learning `j`. This is done with a DPF: two keys `(k0, k1)` such that
+evaluating each key across the whole domain and XOR-ing the results gives the
+target value at index `j` and zero everywhere else.
 
-Assignment 3 keeps the same DPF logic, with these changes:
+`EvalFull` verifies this by evaluating both keys and checking the
+reconstruction. The PRG uses AES-128-ECB through OpenSSL EVP to expand a
+128-bit seed into two child seeds per tree level.
 
-1. For the leaf nodes, instead of scalar values, they are converted into
-   vectors of size equal to the row length of the item matrix.
-2. The final correction word (FCW) is also changed to a vector.
+For the item update, the DPF is extended:
+
+1. Leaf nodes hold vectors, of size equal to the row length of the item
+   matrix, instead of scalars.
+2. The final correction word (FCW) is also a vector.
 3. The correction words are computed as:
 
    ```
@@ -127,48 +137,15 @@ Compose service name (`dealer`, `party0`).
 | `dealer.cpp` | Coordinates MPC, sends triplets, reconstructs results |
 | `party0.cpp`, `party1.cpp` | Perform the MPC steps and communicate |
 | `common.hpp` | Coroutine-based network utilities (send/recv for ints, vectors, matrices) |
-| `src/dpf.hpp` *(A3 only)* | `DpfKey` structure, DPF generation and evaluation with vector leaves and FCW |
+| `src/dpf.hpp` *(item-update module only)* | `DpfKey` structure, DPF generation and evaluation with vector leaves and FCW |
 
-In Assignment 1 these sit in `parties/`, `dealer/`, `operationFunctions/` and
-`generatorFunctions/`. In Assignment 3 they are under `src/`.
+In the user-update module these sit in `parties/`, `dealer/`,
+`operationFunctions/` and `generatorFunctions/`. In the item-update module
+they are under `src/`.
 
-## Build and Run Commands
+## Benchmarks
 
-Assignment 1 and Assignment 3 both run through Docker:
-
-```bash
-cd a1-mpc-rec-sys          # or a3-a4-item-update
-./runProtocol.sh           # prompts for users, items, features, queries
-```
-
-To build and run natively instead:
-
-```bash
-make all                   # -> generate.out dealer.out party0.out party1.out
-make run_generate USERS=3 ITEMS=4 FEATURES=5
-```
-
-then in three separate terminals:
-
-```bash
-./dealer.out
-./party0.out
-./party1.out
-```
-
-Assignment 2 is standalone:
-
-```bash
-cd a2-dpf-gen
-g++ -std=c++20 -O2 gen_queries.cpp -o gen_queries -lssl -lcrypto
-./gen_queries
-```
-
-Requires `g++` with C++20, Boost.System and OpenSSL.
-
-## Assignment 4 — Results
-
-The time taken for the profile updates was measured while varying the number of
+The time taken for a profile update was measured while varying the number of
 users, items and queries. The resulting plots are in
 [a3-a4-item-update/plots/](a3-a4-item-update/plots/):
 
@@ -181,18 +158,24 @@ users, items and queries. The resulting plots are in
 Timing is measured in `dealer.cpp` with `std::chrono::high_resolution_clock`,
 which prints `Total execution time: N ms` at the end of a run.
 
-## Known issues
+## Running
 
-- **`a2-dpf-gen/Dockerfile` does not build.** It compiles with
-  `g++ -o gen_queries gen_queries.cpp` but installs only `libboost-all-dev`,
-  while the source needs OpenSSL. The steps given in `a2-dpf-gen/readme.pdf` —
-  `apt install libssl-dev` and `g++ gen_queries.cpp -o a -lssl -lcrypto` — are
-  the correct ones; the Dockerfile just does not do either of them.
-- `a2-dpf-gen/gen_queries.cpp` prompts for the DPF size and count on `stdin`,
-  as described in its report. The A2 specification instead asks for them as
-  arguments, `./gen_queries <DPF_size> <num_DPFs>`.
-- In `a3-a4-item-update/src/`, `party0.cpp`, `party1.cpp` and `dealer.cpp`
-  include `"../common.hpp"` although the file is at `src/common.hpp`. It only
-  resolves because of the `-I./src/headerFiles` flag in the Makefile.
-- `depends_on` in `docker-compose.yml` orders container start but does not wait
-  for a listening socket, so a run can occasionally fail on connect. Re-run it.
+Both modules are launched with `./runProtocol.sh` from their own directory,
+which prompts for the parameters and brings up Docker Compose. Full build and
+run instructions are in each module's own report:
+
+| Module | What it does | Report |
+|---|---|---|
+| [a1-mpc-rec-sys/](a1-mpc-rec-sys/) | Secure user-profile update | [readme.pdf](a1-mpc-rec-sys/readme.pdf) |
+| [a2-dpf-gen/](a2-dpf-gen/) | DPF generation and `EvalFull` testing | [readme.pdf](a2-dpf-gen/readme.pdf) |
+| [a3-a4-item-update/](a3-a4-item-update/) | Secure item-profile update (DPF + MPC), with benchmarks | [readme.pdf](a3-a4-item-update/readme.pdf) |
+
+---
+
+## Repository layout
+
+This system was built up across coursework submissions, so the module
+directories are still named after them. `a3-a4-item-update/` combines the
+user-update protocol and the DPF generator, and keeps its own modified copies
+of that code rather than importing it — each module has to build and run on
+its own.
