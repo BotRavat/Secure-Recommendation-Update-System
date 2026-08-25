@@ -164,8 +164,7 @@ g++ -std=c++20 -O2 gen_queries.cpp -o gen_queries -lssl -lcrypto
 ./gen_queries
 ```
 
-Requires `g++` with C++20, Boost.System and OpenSSL. To package an assignment
-for submission: `./scripts/bundle.sh a3-a4-item-update`.
+Requires `g++` with C++20, Boost.System and OpenSSL.
 
 ## Assignment 4 — Results
 
