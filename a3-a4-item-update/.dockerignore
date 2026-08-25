@@ -1,0 +1,10 @@
+# Keep the build context small — none of this is needed to compile
+*.pdf
+*.ipynb
+plots/
+.ipynb_checkpoints/
+.DS_Store
+*.out
+*.o
+a
+src/a
